@@ -7,36 +7,24 @@ static struct gpio_desc *led, *button;
 #define IO_LED 21
 #define IO_BUTTON 20
 
-#define IO_OFFSET 0
-
 static int __init my_init(void)
 {
-	int status;
-
-	led = gpio_to_desc(IO_LED + IO_OFFSET);
-	if (!led) {
-		printk("gpioctrl - Error getting pin %d\n", IO_LED);
-		return -ENODEV;
+	/* Request the LED GPIO */
+	led = gpiod_get_optional(NULL, "gpio21", GPIOD_OUT_LOW);
+	if (IS_ERR(led)) {
+		printk("gpioctrl - Error getting GPIO %d\n", IO_LED);
+		return PTR_ERR(led);
 	}
 
-	button = gpio_to_desc(IO_BUTTON + IO_OFFSET);
-	if (!button) {
-		printk("gpioctrl - Error getting pin %d\n", IO_BUTTON);
-		return -ENODEV;
+	/* Request the Button GPIO */
+	button = gpiod_get_optional(NULL, "gpio20", GPIOD_IN);
+	if (IS_ERR(button)) {
+		printk("gpioctrl - Error getting GPIO %d\n", IO_BUTTON);
+		gpiod_put(led);  // Release LED GPIO before returning
+		return PTR_ERR(button);
 	}
 
-	status = gpiod_direction_output(led, 0);
-	if (status) {
-		printk("gpioctrl - Error setting pin %d to output\n", IO_LED);
-		return status;
-	}
-
-	status = gpiod_direction_input(button);
-	if (status) {
-		printk("gpioctrl - Error setting pin %d to input\n", IO_BUTTON);
-		return status;
-	}
-
+	/* Set LED to HIGH */
 	gpiod_set_value(led, 1);
 
 	printk("gpioctrl - Button is %spressed\n", gpiod_get_value(button) ? "" : "not ");
@@ -46,7 +34,14 @@ static int __init my_init(void)
 
 static void __exit my_exit(void)
 {
+	printk("gpioctrl - Unloading driver\n");
+
+	/* Turn off LED */
 	gpiod_set_value(led, 0);
+
+	/* Release GPIOs */
+	gpiod_put(led);
+	gpiod_put(button);
 }
 
 module_init(my_init);
@@ -54,4 +49,4 @@ module_exit(my_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Johannes 4Linux");
-MODULE_DESCRIPTION("An example for using GPIOs without the device tree");
+MODULE_DESCRIPTION("An example for using GPIOs with gpiod");
